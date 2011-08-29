@@ -244,3 +244,14 @@ class PlayerController(object):
     def _loadPattern(self,fileName):
         with open(str(fileName), 'rb') as f:
             return pickle.load(f)
+
+
+class TrackerController(object):
+    def go(self):
+        self.previousTime = pygame.time.get_ticks()
+        self._inputCall = LoopingCall(self._update)
+        d = self._inputCall.start(0.03)
+        return d
+
+    def _update(self):
+        return
