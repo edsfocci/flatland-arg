@@ -58,6 +58,16 @@ class GameAvatar(pb.Avatar):
         return self.environment
     def perspective_getTeam(self):
         return self.player.team
+    #TODO could we add a perspective_getPosition and perspective_getIRTargetStatus here
+    #TODO otherwise, how do we do remote call on a client?
+
+
+class TrackerPort(pb.Root):
+    def remote_setPositions(self, positions):
+        print 'setting player positions: ' + positions
+    def remote_toggleTargets(self, targetStates):
+        print 'toggle IR targets' + targetStates
+
 
 pygame.init()
 pygame.display.set_mode((480, 800), pygame.DOUBLEBUF)
@@ -69,8 +79,13 @@ view.start('Server')
 LoopingCall(lambda: pygame.event.pump()).start(0.03)
 
 portal = portal.Portal(realm, [checkers.AllowAnonymousAccess()])
-
+#TODO why do we use authentication and then allow anonymous access?
 reactor.listenTCP(8800, pb.PBServerFactory(portal))
+
+
+reactor.listenTCP(8789, pb.PBServerFactory(TrackerPort()))
+
 p = reactor.listenUDP(0, DatagramProtocol())
 LoopingCall(lambda: p.write("FlatlandARG!!!", ("224.0.0.1", 8000))).start(1)
 reactor.run()
+#TODO why do we need to advertise the all hosts address instead of just hard coding it into the client
