@@ -8,9 +8,11 @@ from kivy.graphics import Color, Rectangle, Point, GraphicException
 from random import random
 from math import sqrt
 
+from kivy.support import install_twisted_reactor
+install_twisted_reactor()
 from twisted.spread import pb
 from twisted.internet import reactor
-#from twisted.python import util
+
 
 
 def calculate_points(x1, y1, x2, y2, steps=5):
@@ -33,13 +35,28 @@ def calculate_points(x1, y1, x2, y2, steps=5):
 class Tracker(FloatLayout):
 
     def connect(self):
-        clientfactory = pb.PBClientFactory()
-        reactor.connectTCP("localhost", 8789, clientfactory)
-        d = clientfactory.getRootObject()
+        self._lost_targets = []
+        self._new_targets = []
+        self._moved_targets = []
+        self._clientfactory = pb.PBClientFactory()
+        reactor.connectTCP("localhost", 8789, self._clientfactory)
+        d = self._clientfactory.getRootObject()
         d.addCallback(self.send_msg)
 
     def send_msg(self, result):
         d = result.callRemote("echo", "hello network")
+        d.addCallback(self.get_msg)
+
+    def send_lost_target(self, result):
+        d = result.callRemote("lost_target", self._lost_targets.pop())
+        d.addCallback(self.get_msg)
+
+    def send_new_target(self, result):
+        d = result.callRemote("new_target", self._new_targets.pop())
+        d.addCallback(self.get_msg)
+
+    def send_target_moved(self, result):
+        d = result.callRemote("moved_target", self._moved_targets.pop())
         d.addCallback(self.get_msg)
 
     def get_msg(self, result):
@@ -60,6 +77,9 @@ class Tracker(FloatLayout):
         ud['label'] = Label(size_hint=(None, None))
         self.update_touch_label(ud['label'], touch)
         self.add_widget(ud['label'])
+#        self._new_targets.append(touch)
+#        d = self._clientfactory.getRootObject()
+#        d.addCallback(self.send_new_target)
 
     def on_touch_move(self, touch):
         ud = touch.ud
@@ -79,11 +99,17 @@ class Tracker(FloatLayout):
 
         ud['label'].pos = touch.pos
         self.update_touch_label(ud['label'], touch)
+#        self._moved_targets.append(touch)
+#        d = self._clientfactory.getRootObject()
+#        d.addCallback(self.send_target_moved)
 
     def on_touch_up(self, touch):
         ud = touch.ud
         self.canvas.remove_group(ud['group'])
         self.remove_widget(ud['label'])
+#        self._lost_targets.append(touch)
+#        d = self._clientfactory.getRootObject()
+#        d.addCallback(self.send_lost_target)
 
     def update_touch_label(self, label, touch):
         label.text = 'ID: %s\nPos: (%d, %d)\nClass: %s' % (
@@ -91,6 +117,7 @@ class Tracker(FloatLayout):
         label.texture_update()
         label.pos = touch.pos
         label.size = label.texture_size[0] + 20, label.texture_size[1] + 20
+
 
 
 class TrackerApp(App):
@@ -101,8 +128,9 @@ class TrackerApp(App):
         return Tracker()
 
     def on_start(self):
-        self.root.connect()
-        reactor.run()
+        pass
+#        self.root.connect()
+#        reactor.run()
 
 if __name__ in ('__main__', '__android__'):
     TrackerApp().run()

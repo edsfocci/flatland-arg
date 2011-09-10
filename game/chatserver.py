@@ -66,12 +66,20 @@ class TrackerPort(pb.Root):
     def remote_echo(self, st):
         print 'echoing: ', st
         return st
-    
-    def remote_setPositions(self, positions):
-        print 'setting player positions: ' + positions
 
-    def remote_toggleTargets(self, targetStates):
-        print 'toggle IR targets' + targetStates
+    def remote_lost_taget(self, touch):
+        print 'this target was lost: ', touch
+        return touch
+
+    def remote_new_taget(self, touch):
+        print 'this is a new target: ', touch
+        return touch
+
+    def remote_moved_target(self, touch):
+        print 'this is a moved target: ', touch
+        return touch
+    
+
 
 
 pygame.init()
@@ -83,12 +91,14 @@ realm.environment = env
 view.start('Server')
 LoopingCall(lambda: pygame.event.pump()).start(0.03)
 
+tracker = TrackerPort()
+
 portal = portal.Portal(realm, [checkers.AllowAnonymousAccess()])
 
 reactor.listenTCP(8800, pb.PBServerFactory(portal))
 
 
-reactor.listenTCP(8789, pb.PBServerFactory(TrackerPort()))
+reactor.listenTCP(8789, pb.PBServerFactory(tracker))
 
 p = reactor.listenUDP(0, DatagramProtocol())
 LoopingCall(lambda: p.write("FlatlandARG!!!", ("224.0.0.1", 8000))).start(1)
