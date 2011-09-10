@@ -10,7 +10,7 @@ from math import sqrt
 
 from twisted.spread import pb
 from twisted.internet import reactor
-from twisted.python import util
+#from twisted.python import util
 
 
 def calculate_points(x1, y1, x2, y2, steps=5):
@@ -33,13 +33,16 @@ def calculate_points(x1, y1, x2, y2, steps=5):
 class Tracker(FloatLayout):
 
     def connect(self):
-        #TODO this is from http://www.saltycrane.com/blog/2008/10/running-twisted-perspective-broker-example-twistd/
         clientfactory = pb.PBClientFactory()
         reactor.connectTCP("localhost", 8789, clientfactory)
         d = clientfactory.getRootObject()
         d.addCallback(self.send_msg)
 
     def send_msg(self, result):
+        d = result.callRemote("echo", "hello network")
+        d.addCallback(self.get_msg)
+
+    def get_msg(self, result):
         print "server echoed: ", result
 
     def on_touch_down(self, touch):
