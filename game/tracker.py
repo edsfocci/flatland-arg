@@ -129,7 +129,7 @@ class TrackerApp(App):
 
     def on_start(self):
         pass
-#        self.root.connect()
+        self.root.connect()
 #        reactor.run()
 
 if __name__ in ('__main__', '__android__'):
