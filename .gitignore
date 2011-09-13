@@ -8,3 +8,9 @@
 
 #ignore IDE files
 /.idea/
+
+#ignore arduino build
+/flatland-arduino/applet/
+
+#ignore emacs autosave
+*~
