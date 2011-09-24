@@ -8,11 +8,9 @@ gestures.py
 import os
 import sys
 import getopt
-import serial
 import pickle
 import atexit
-import time
-import 
+import accelreader
 from copy import deepcopy
 
 
@@ -26,16 +24,7 @@ e.g. scan, build or attack
 -g, --getSample will take sample data and compare it with save patterns
 '''
 
-# global stuff
-try:
-#    ser = serial.Serial('/dev/tty.usbserial-A7004INu', 9600)
-    ser = serial.Serial('/dev/ttyUSB0', 9600)
-    ser.readline()
-    ser.readline()
-    ser.readline()
-    ser.flush()
-except serial.serialutil.SerialException as detail:
-    print 'Serial error:', detail
+reader = accelreader.AccelReader()
 
 # these are used to define the limits of the sensor
 maxData = [0,0,0]
@@ -120,7 +109,7 @@ def defineLimits():
     """
     atexit.register(resetLimits)
     while 1:
-        data = readSerial()
+        data = reader.get_pos()
         for i in range(len(maxData)):
             if data[i] < 255 and data[i] > maxData[i]:
                 maxData[i] = data[i]
@@ -144,7 +133,7 @@ def getSampleData(sampleLength, averageSoFar=None):
     areas = loadPattern("pickles/areas.pickle")
     counter = 0
     while counter < sampleLength:
-        data = readSerial()            
+        data = reader.get_pos()
         keys = ['x', 'y', 'z']
         data = {'x': data[0], 'y': data[1], 'z': data[2]}
         results = {}
@@ -177,16 +166,8 @@ def getSampleData(sampleLength, averageSoFar=None):
 
 
 def readSerial():
-        try:
-            data = ser.readline()
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except serial.serialutil.SerialException as detail:
-            print 'Serial error:', detail
-        else:
-            data = data.split()
-            for i in range(len(data)): data[i] = int(data[i])
-            return data
+    data = reader.get_pos()
+
 
 def printResults(*arg):
     os.system('clear')
