@@ -177,13 +177,19 @@ def printResults(*arg):
 
 
 def savePattern(pattern, fileName):
-    with open(str(fileName), 'wb') as f:
-        pickle.dump(pattern, f)
+    f = open(filename, 'wb')
+    pickle.dump(pattern, f)
+
+#    with open(str(fileName), 'wb') as f:
+#        pickle.dump(pattern, f)
 
 
 def loadPattern(fileName):
-    with open(str(fileName), 'rb') as f:
-        return pickle.load(f)
+    f = open(filename, 'rb')
+    return pickle.load(f)
+
+#    with open(str(fileName), 'rb') as f:
+#        return pickle.load(f)
 
 
 def initPattern(level):
