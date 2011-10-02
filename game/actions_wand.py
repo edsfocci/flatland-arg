@@ -125,7 +125,11 @@ class PlayerController(object):
         self.previousTime = time
 
         #If player is pressing red self.BUTTON on scepter take two samples, add them to the average, match to predefined patterns
-        self._serialData = self._readSerial()
+        #updated for lack of scepter button, replacement will be if player is pressing screen
+        #don't know if this is the right way to get mouse buttons from event queue
+        buttons = pygame.mouse.get_pressed()
+        self._serialData[self.BUTTON] = buttons[0]
+
         if self._serialData[self.BUTTON] == 1:
             self._buildSampleData()
             if self._sampleCnt == 2:
