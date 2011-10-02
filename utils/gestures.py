@@ -107,17 +107,20 @@ def defineLimits():
     and mac on each access. When keyboard interrupts, the min and max values are used to create a range and three regions
     on each axis. the regions are used later on when creating patterns and sample data
     """
-    atexit.register(resetLimits)
-    while 1:
-        data = reader.get_pos()
-        for i in range(len(maxData)):
-            if data[i] < 255 and data[i] > maxData[i]:
-                maxData[i] = data[i]
+    while True:
+        try:
+            data = reader.get_pos()
+            for i in range(len(maxData)):
+                if data[i] < 255 and data[i] > maxData[i]:
+                    maxData[i] = data[i]
 
-            if data[i] < minData[i]:
-                minData[i] = data[i]
+                if data[i] < minData[i]:
+                    minData[i] = data[i]
                 
-        printResults(minData, maxData)
+            printResults(minData, maxData)
+        except KeyboardInterrupt:
+            resetLimits()
+            break
         
 
 
