@@ -12,7 +12,7 @@ import pygame.time
 import sys
 
 #Added these imports for gesture recognition
-import serial
+import utils.accelreader
 import pickle
 from copy import deepcopy
 
@@ -25,6 +25,7 @@ from pygame import (K_a as ATTACK,
                     K_ESCAPE as QUIT)
 
 from game.vector import Vector2D
+
 
 class PlayerController(object):
     """
@@ -46,9 +47,9 @@ class PlayerController(object):
         self._currentAction = None
 
         #Added these for gesture recognition
-        self._attackRight = self._loadPattern("game/pickles/attackRightPattern.pickle")
-        self._upgrade = self._loadPattern("game/pickles/attackLeftPattern.pickle")
-        self._scan = self._loadPattern("game/pickles/scanPattern.pickle")
+        self._scanRight = self._loadPattern("game/pickles/scanRightPattern.pickle")
+        self._upgrade = self._loadPattern("game/pickles/scanLeftPattern.pickle")
+        self._attack = self._loadPattern("game/pickles/attackPattern.pickle")
         self._build = self._loadPattern("game/pickles/buildPattern.pickle")
         self._areas = self._loadPattern("game/pickles/areas.pickle")
         #this is a list of area transitions
@@ -59,15 +60,8 @@ class PlayerController(object):
         self._currentPattern = None
         self._sampleCnt = 0
         self._lastPosition = (0,0,0)
-        try:
-            self._ser = serial.Serial('/dev/ttyUSB0', 9600)
-            self._ser.readline()
-            self._ser.readline()
-            self._ser.flush()
-        except serial.serialutil.SerialException as detail:
-            print 'Serial error:', detail
-            reactor.stop()
-            sys.exit()
+        self._ser = accelreader.AccelReader()
+
 
 
     def go(self):
@@ -212,16 +206,7 @@ class PlayerController(object):
 
 
     def _readSerial(self):
-        try:
-            data = self._ser.readline()
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except serial.serialutil.SerialException as detail:
-            print 'Serial error:', detail
-        else:
-            data = data.split()
-            for i in range(len(data)): data[i] = int(data[i])
-            return data
+        data = self._ser.get_pos()
 
 
     def _initPattern(self,level):
