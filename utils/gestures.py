@@ -77,9 +77,9 @@ def calibratePattern(pattern):
 
 
 def matchPattern():
-    attackRight = loadPattern("pickles/scanRightPattern.pickle")
-    attackLeft = loadPattern("pickles/scanLeftPattern.pickle")
-    scan = loadPattern("pickles/attackPattern.pickle")
+    scanRight = loadPattern("pickles/scanRightPattern.pickle")
+    scanLeft = loadPattern("pickles/scanLeftPattern.pickle")
+    attack = loadPattern("pickles/attackPattern.pickle")
     build = loadPattern("pickles/buildPattern.pickle")
     bestFit = {}
     sample = None
