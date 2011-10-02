@@ -116,7 +116,7 @@ def defineLimits():
 
                 if data[i] < minData[i]:
                     if data[i] < -1000: minData[i] = -1000
-                    else minData[i] = data[i]
+                    else: minData[i] = data[i]
                 
             printResults(minData, maxData)
         except KeyboardInterrupt:
