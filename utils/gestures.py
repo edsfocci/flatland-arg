@@ -29,7 +29,7 @@ reader = accelreader.AccelReader()
 # these are used to define the limits of the sensor
 maxData = [0,0,0]
 minData = [255,255,255]
-areas = {}
+
 
 class Usage(Exception):
     def __init__(self, msg):
@@ -177,7 +177,7 @@ def printResults(*arg):
 
 
 def savePattern(pattern, fileName):
-    f = open(filename, 'wb')
+    f = open(str(filename), 'wb')
     pickle.dump(pattern, f)
 
 #    with open(str(fileName), 'wb') as f:
@@ -185,7 +185,7 @@ def savePattern(pattern, fileName):
 
 
 def loadPattern(fileName):
-    f = open(filename, 'rb')
+    f = open(str(filename), 'rb')
     return pickle.load(f)
 
 #    with open(str(fileName), 'rb') as f:
@@ -210,6 +210,7 @@ def resetLimits():
     areas is a dictionary that defines the minimum, 1/3, 2/3 and maximum of the range on each axsis of the accelererometer
     
     """
+    areas = {}
     xRange = maxData[0] - minData[0]
     yRange = maxData[1] - minData[1]
     zRange = maxData[2] - minData[2]
