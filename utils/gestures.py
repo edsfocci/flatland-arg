@@ -180,15 +180,16 @@ def printResults(*arg):
 
 
 def savePattern(pattern, fileName):
-    f = open(str(filename), 'wb')
+    f = open(str(fileName), 'wb')
     pickle.dump(pattern, f)
+    f.close()
 
 #    with open(str(fileName), 'wb') as f:
 #        pickle.dump(pattern, f)
 
 
 def loadPattern(fileName):
-    f = open(str(filename), 'rb')
+    f = open(str(fileName), 'rb')
     return pickle.load(f)
 
 #    with open(str(fileName), 'rb') as f:
