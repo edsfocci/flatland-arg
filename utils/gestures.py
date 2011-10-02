@@ -21,7 +21,7 @@ e.g. scan, build or attack
 
 
 -l, --limits will set the range of the accelerometer
--g, --getSample will take sample data and compare it with save patterns
+-m, --getSample will take sample data and compare it with save patterns
 '''
 
 reader = accelreader.AccelReader()
@@ -77,18 +77,18 @@ def calibratePattern(pattern):
 
 
 def matchPattern():
-    attackRight = loadPattern("pickles/attackRightPattern.pickle")
-    attackLeft = loadPattern("pickles/attackLeftPattern.pickle")
-    scan = loadPattern("pickles/scanPattern.pickle")
+    attackRight = loadPattern("pickles/scanRightPattern.pickle")
+    attackLeft = loadPattern("pickles/scanLeftPattern.pickle")
+    scan = loadPattern("pickles/attackPattern.pickle")
     build = loadPattern("pickles/buildPattern.pickle")
     bestFit = {}
     sample = None
     while 1:
         sample = getSampleData(2, sample)
-        bestFit['attackRight'] = patternDifference(sample, attackRight)
-        bestFit['attackLeft'] = patternDifference(sample, attackLeft)
+        bestFit['scanRight'] = patternDifference(sample, scanRight)
+        bestFit['scanLeft'] = patternDifference(sample, scanLeft)
         bestFit['build'] = patternDifference(sample, build)
-        bestFit['scan'] = patternDifference(sample, scan)
+        bestFit['attack'] = patternDifference(sample, attack)
         print min(bestFit, key=bestFit.get)
 
 def patternDifference(a,b):
@@ -104,18 +104,19 @@ def patternDifference(a,b):
 def defineLimits():
     """
     Run this function to find the limits of the accelerometer. Constantly reads the values and keeps track of the min
-    and mac on each access. When keyboard interrupts, the min and max values are used to create a range and three regions
+    and max on each access. When keyboard interrupts, the min and max values are used to create a range and three regions
     on each axis. the regions are used later on when creating patterns and sample data
     """
     while True:
         try:
             data = reader.get_pos()
             for i in range(len(maxData)):
-                if data[i] < 255 and data[i] > maxData[i]:
+                if data[i] > maxData[i]:
                     maxData[i] = data[i]
 
                 if data[i] < minData[i]:
-                    minData[i] = data[i]
+                    if data[i] < -1000: minData[i] = -1000
+                    else minData[i] = data[i]
                 
             printResults(minData, maxData)
         except KeyboardInterrupt:
