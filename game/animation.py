@@ -1,10 +1,16 @@
 from twisted.internet.task import LoopingCall
 import pygame
 import itertools
+import math
 from vector import Vector2D
+
+rotateForTablet = True
 
 def _loadImage(path):
     image = pygame.image.load(path)
+    if rotateForTablet:
+        image = pygame.transform.rotate(image, -90)
+        
     # TODO Are all of our images alpha'd now?
     if True:
         image = image.convert_alpha()
@@ -15,9 +21,17 @@ def _loadImage(path):
 
 class Image(object):
     def __init__(self, path, offset = (0,0)):
+        
+        ox = offset[0]
+        oy = offset[1]
+        if rotateForTablet:
+            ox = offset[1]
+            oy = offset[0]
+ 
+        
         if path:
             self.path = path.path
-        self.offset = Vector2D(offset)
+        self.offset = Vector2D(ox, oy)
         self.degrees = None
 
     def load(self):
@@ -29,7 +43,6 @@ class Image(object):
         self.width, self.height = self._image.get_rect().size
 
     def draw(self, screen, position):
-        
         if self.degrees == None:
             imagePosition = position - self.center + self.offset
             screen.blit(self._image, imagePosition)
@@ -40,7 +53,16 @@ class Image(object):
 
     def drawScaled(self, screen, position, scale):
         center = self.center * scale
-        image = pygame.transform.smoothscale(self._image, center * 2)
+        
+        center.x = math.ceil(center.x)
+        center.y = math.ceil(center.y)
+        
+        #print str(center.x) + ", " + str(center.y) + "\n"
+        size = Vector2D(int(math.ceil(2*center.x)), int(math.ceil(2*center.y)))
+        
+        
+        
+        image = pygame.transform.smoothscale(self._image, size)
         imagePosition = (position[0] - center[0], position[1] - center[1])
         screen.blit(image, imagePosition)
 
@@ -95,3 +117,9 @@ class LoopingAnimation(Animation):
     def start(self, fps):
         self._loopingCall = LoopingCall(self._nextImage, itertools.cycle(self._images))
         return self._loopingCall.start(1.0 / fps)
+    
+    def _nextImage(self, iterator):
+        try:
+            self._image = iterator.next()
+        except StopIteration:
+            self.stop()

@@ -12,19 +12,26 @@ import pygame.time
 import sys
 
 #Added these imports for gesture recognition
-import serial
+import accelreader
 import pickle
 from copy import deepcopy
-
 
 # TODO: Can we have a keymap file?
 from pygame import (K_a as ATTACK,
                     K_s as SCAN,
                     K_d as BUILD,
                     K_w as UPGRADE,
+
+                    K_DOWN as MOVE_DOWN,
+                    K_UP as MOVE_UP,
+                    K_LEFT as MOVE_LEFT,
+                    K_RIGHT as MOVE_RIGHT,
+
                     K_ESCAPE as QUIT)
 
 from game.vector import Vector2D
+
+ACCEL_READ_WINDOW_LENGTH = 30
 
 class PlayerController(object):
     """
@@ -44,33 +51,37 @@ class PlayerController(object):
         self.view = view
         self._actionQueue = []
         self._currentAction = None
+        self._lastAction = None
 
         #Added these for gesture recognition
-        self._attackRight = self._loadPattern("game/pickles/attackRightPattern.pickle")
-        self._upgrade = self._loadPattern("game/pickles/attackLeftPattern.pickle")
-        self._scan = self._loadPattern("game/pickles/scanPattern.pickle")
+        self._scan = self._loadPattern("game/pickles/scanRightPattern.pickle")
+        self._upgrade = self._loadPattern("game/pickles/scanLeftPattern.pickle")
+        self._attack = self._loadPattern("game/pickles/attackPattern.pickle")
         self._build = self._loadPattern("game/pickles/buildPattern.pickle")
         self._areas = self._loadPattern("game/pickles/areas.pickle")
         #this is a list of area transitions
         self._sampleData = self._initPattern(1)
         self._transitionAverages = self._initPattern(1)
         #this is the current serial data
-        self._serialData = None
+        self._serialData = {}
+        self._serialData[self.BUTTON] = 0
         self._currentPattern = None
         self._sampleCnt = 0
         self._lastPosition = (0,0,0)
-        try:
-            self._ser = serial.Serial('/dev/ttyUSB0', 9600)
-            self._ser.readline()
-            self._ser.readline()
-            self._ser.flush()
-        except serial.serialutil.SerialException as detail:
-            print 'Serial error:', detail
-            reactor.stop()
-            sys.exit()
+        self._ser = accelreader.AccelReader()
+
+        self.accelerometerPollFunc = None
+
+        self._movingUp = False
+        self._movingDown = False
+        self._movingLeft = False
+        self._movingRight = False
+
 
 
     def go(self):
+        #print("Listen!")
+        #self.startGestureListen()
         self.previousTime = pygame.time.get_ticks()
         self._inputCall = LoopingCall(self._handleInput)
         d = self._inputCall.start(0.03)
@@ -87,26 +98,60 @@ class PlayerController(object):
         destination = self.view.worldCoord(Vector2D(pygame.mouse.get_pos()))
         direction = destination - self.position
         if direction < (self.speed * dt):
-            self.position = destination
+            #self.position = destination
+            pass
         else:
+            #self.position += (dt * self.speed) * direction.norm()
+            pass
+
+        #=======================================================================
+        directionX = 0
+        directionY = 0
+
+        if (self._movingUp):
+            directionY = -1
+        elif self._movingDown:
+            directionY = 1
+
+        if (self._movingLeft):
+            directionX = -1
+        elif self._movingRight:
+            directionX = 1
+
+        direction = Vector2D(directionX, directionY)#destination - self.position
+
+        #if direction < (self.speed * dt):
+        #    self.position = destination
+        #else:
+        #    self.position += (dt * self.speed) * direction.norm()
+        if directionX != 0 or directionY != 0:
             self.position += (dt * self.speed) * direction.norm()
+        #=======================================================================
+
         self.perspective.callRemote('updatePosition', self.position)
-        self.view.setCenter(self.position)
+        #self.view.setCenter(self.position)
 
 
     def _startedAction(self, action):
+        actionBeforeLast = self._lastAction
+        self._lastAction = self._currentAction
         self._currentAction = action
         if self._currentAction == ATTACK:
-            self.perspective.callRemote('startAttacking')
+            if self._lastAction != ATTACK:
+                self.perspective.callRemote('startAttacking')
         elif self._currentAction == BUILD:
-            self.perspective.callRemote('startBuilding')
+            if self._lastAction != BUILD:
+                self.perspective.callRemote('startBuilding')
         elif self._currentAction == SCAN:
-            self.perspective.callRemote('startScanning')
-            self.view.addAction("sweep")
+            if self._lastAction != SCAN:
+                self.perspective.callRemote('startScanning')
+                self.view.addAction("sweep")
         elif self._currentAction == UPGRADE:
-            self.perspective.callRemote('startUpgrading')
+            if self._lastAction != UPGRADE:
+                self.perspective.callRemote('startUpgrading')
         else:
-            self._currentAction = None
+            if self._lastAction == None:
+                self._currentAction = None
 
 
     def _finishedAction(self):
@@ -121,6 +166,173 @@ class PlayerController(object):
         self._currentAction = None
         return
 
+    def getAccelReading(self):
+
+        self.nReadings = (self.nReadings + 1) % ACCEL_READ_WINDOW_LENGTH
+        data = self._readSerial()#reader.get_pos()
+
+        newToOldRatio = .2
+
+        for i in range(0,3):
+            #dynamicAvg[i] = dynamicAvg[i] + (data[i] - lastOne[i])*(data[i] - lastOne[i])
+            #avg[i] = avg[i] + data[i]*data[i]*getSignMultiplier(data[i])
+
+            self.dynamicAvg[i] = (1 - newToOldRatio)*self.dynamicAvg[i] + newToOldRatio*(data[i] - self.lastOne[i])*(data[i] - self.lastOne[i])
+            self.avg[i]        = (1 - newToOldRatio)*self.avg[i] + newToOldRatio*data[i]*data[i]*self.getSignMultiplier(data[i])
+
+            self.lastOne[i] = data[i]
+
+
+        if self.nReadings == 0:
+        #=======================================================================
+            movingTooMuchForUpgrade = False
+            movingSlowEnoughForUpgrade = True
+
+            signlessAvg = self.avg
+            for i in range(0,3):
+                #dynamicAvg[i] = dynamicAvg[i] #/ nCycles
+                #avg[i] = avg[i] #/ nCycles
+                signlessAvg[i] = abs(self.dynamicAvg[i])
+                movingTooMuchForUpgrade = movingTooMuchForUpgrade or signlessAvg[i] > 10000
+                movingSlowEnoughForUpgrade = movingSlowEnoughForUpgrade and signlessAvg[i] < 7
+
+
+            stormiestDimension = self.dynamicAvg.index(max(self.dynamicAvg))
+
+                #check for the upgrading gesture (static)
+            if self.lastOne.index(max(self.lastOne)) == 0 and self.lastOne[0] > 800:# and not movingTooMuchForUpgrade and movingSlowEnoughForUpgrade:
+                print("upgrade")
+                self._startedAction(UPGRADE)
+                    #
+         #self._startedAction(UPGRADE)
+    #            #check for dynamic gestures
+
+            elif movingTooMuchForUpgrade:
+    #                if signlessAvg.index(max(signlessAvg)) == 0 and avg[0] > 0 and stormiestDimension == 2:
+    #                    print("upgrade")
+    #                el
+                if stormiestDimension == 0:
+                    print("attack")
+                    self._startedAction(ATTACK)
+                    #self._startedAction(ATTACK)
+                elif stormiestDimension == 1:
+                    print("scan")
+                    self._startedAction(SCAN)
+
+                    #self._startedAction(SCAN)
+                elif stormiestDimension == 2:
+                    print("build")
+                    self._startedAction(BUILD)
+                    #self._startedAction(BUILD)
+            else:
+                print("none")
+                self._finishedAction()
+
+            # ===== print totals ======
+            print "prev:\nX: " + str(self.lastOne[0]) +"\nY: " +  str(self.lastOne[1]) + "\nZ: " + str(self.lastOne[2]) + "\n"
+            print "\nacc:\nX: " + str(self.avg[0]) +"\nY: " +  str(self.avg[1]) + "\nZ: " + str(self.avg[2]) + "\n"
+            print "\njerk:\nX: " + str(self.dynamicAvg[0]) +"\nY: " +  str(self.dynamicAvg[1]) + "\nZ: " + str(self.dynamicAvg[2]) + "\n\n"
+
+            self.dynamicAvg = [0, 0, 0]
+            self.avg = [0, 0, 0]
+            self.lastOne = [0, 0, 0]
+
+        #=======================================================================
+        #=======================================================================
+
+
+
+    def pollAccelerometer(self):
+        dynamicAvg = [0, 0, 0]
+        avg = [0, 0, 0]
+        lastOne = [0, 0, 0]
+        nChecks = 0
+        nCycles = 75
+
+        for i in range(0, nCycles):
+            data = self._readSerial()#reader.get_pos()
+
+            newToOldRatio = .2
+
+            for i in range(0,3):
+                #dynamicAvg[i] = dynamicAvg[i] + (data[i] - lastOne[i])*(data[i] - lastOne[i])
+                #avg[i] = avg[i] + data[i]*data[i]*getSignMultiplier(data[i])
+
+                dynamicAvg[i] = (1 - newToOldRatio)*dynamicAvg[i] + newToOldRatio*(data[i] - lastOne[i])*(data[i] - lastOne[i])
+                avg[i]        = (1 - newToOldRatio)*avg[i] + newToOldRatio*data[i]*data[i]*self.getSignMultiplier(data[i])
+
+                lastOne[i] = data[i]
+
+            nChecks = (nChecks + 1) % nCycles
+            pygame.time.wait(10)
+
+
+        #=======================================================================
+
+        movingTooMuchForUpgrade = True
+
+        signlessAvg = avg
+        for i in range(0,3):
+            #dynamicAvg[i] = dynamicAvg[i] #/ nCycles
+            #avg[i] = avg[i] #/ nCycles
+            signlessAvg[i] = abs(avg[i])
+            movingTooMuchForUpgrade = movingTooMuchForUpgrade and dynamicAvg[i] > 7
+
+
+        stormiestDimension = dynamicAvg.index(max(dynamicAvg))
+
+        if self._currentAction == None:
+            pass
+            #check for the upgrading gesture (static)
+        if lastOne.index(max(lastOne)) == 0 and lastOne[0] > 900 and not movingTooMuchForUpgrade and movingSlowEnoughForUpgrade:
+            print("upgrade")
+            self._startedAction(UPGRADE)
+                #
+     #self._startedAction(UPGRADE)
+#            #check for dynamic gestures
+
+        elif movingTooMuchForUpgrade:
+#                if signlessAvg.index(max(signlessAvg)) == 0 and avg[0] > 0 and stormiestDimension == 2:
+#                    print("upgrade")
+#                el
+            if stormiestDimension == 0:
+                print("attack")
+                self._startedAction(ATTACK)
+                #self._startedAction(ATTACK)
+            elif stormiestDimension == 1:
+                print("scan")
+                self._startedAction(SCAN)
+
+                #self._startedAction(SCAN)
+            elif stormiestDimension == 2:
+                print("build")
+                self._startedAction(BUILD)
+
+        # ===== print totals ======
+        #print "\njerk:\nX: " + str(dynamicAvg[0]) +"\nY: " +  str(dynamicAvg[1]) + "\nZ: " + str(dynamicAvg[2])
+
+
+        #print "\nacc:\nX: " + str(avg[0]) +"\nY: " +  str(avg[1]) + "\nZ: " + str(avg[2]) + "\n\n"
+        #=======================================================================
+
+
+
+    def getSignMultiplier(self,num):
+        if num < 0:
+            return -1
+        else:
+            return 1
+
+    def startGestureListen(self):
+        #self.accelerometerPollFunc = LoopingCall(self.pollAccelerometer)
+        #self.accelerometerPollFunc.start(.3, now=True)
+        self.pollAccelerometer()
+        #don't start immediately because people tend not to start flailing until *after* they press the screen
+
+    def stopGestureListen(self):
+        if self.accelerometerPollFunc and self.accelerometerPollFunc.running:
+            self.accelerometerPollFunc.stop()
+        self._finishedAction()
 
     def _handleInput(self):
         """
@@ -131,35 +343,58 @@ class PlayerController(object):
         self.previousTime = time
 
         #If player is pressing red self.BUTTON on scepter take two samples, add them to the average, match to predefined patterns
-        self._serialData = self._readSerial()
-        if self._serialData[self.BUTTON] == 1:
-            self._buildSampleData()
-            if self._sampleCnt == 2:
-                self._averageSampleData()
-                self._currentPattern = self._matchPattern()
+        #updated for lack of scepter button, replacement will be if player is pressing screen
+        #don't know if this is the right way to get mouse buttons from event queue
 
-                if self._currentPattern != self._currentAction:
-                    self._actionQueue.append(self._currentPattern)
-                    if self._currentAction:
-                        self._finishedAction();
+        for event in pygame.event.get():
+            onDown = self._serialData[self.BUTTON] == 0
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                self._serialData[self.BUTTON] = 1
+                if onDown:
+                    self.startGestureListen()
 
-        elif self._serialData[self.BUTTON] == 0 and self._currentPattern:
-            self._actionQueue = []
-            self._finishedAction()
-            #no action self.BUTTON pressed after matching a pattern; reset
-            self._currentPattern = None
-            #this could cause problems with unreliable serial connection, need to test
-            self._transitionAverages = self._initPattern(1)
+            elif event.type == pygame.MOUSEBUTTONUP:
+                self._serialData[self.BUTTON] = 0
+                self.stopGestureListen()
+
+
+            if (event.type == pygame.KEYDOWN):
+                self.motionKeyPress(event.key)
+            elif (event.type == pygame.KEYUP):
+                self.motionKeyRelease(event.key)
+
+        #buttons = pygame.mouse.get_pressed()
+        #self._serialData[self.BUTTON] = buttons[0]
+        #print str(self._serialData[self.BUTTON])
+
+#        if self._serialData[self.BUTTON] == 1:
+#            self._buildSampleData()
+#            if self._sampleCnt == 2:
+#                self._averageSampleData()
+#                self._currentPattern = self._matchPattern()
+#
+#                if self._currentPattern != self._currentAction:
+#                    self._actionQueue.append(self._currentPattern)
+#                    if self._currentAction:
+#                        self._finishedAction();
+#
+#        elif self._serialData[self.BUTTON] == 0 and self._currentPattern:
+#            self._actionQueue = []
+#            self._finishedAction()
+#            #no action self.BUTTON pressed after matching a pattern; reset
+#            self._currentPattern = None
+#            #this could cause problems with unreliable serial connection, need to test
+#            self._transitionAverages = self._initPattern(1)
 
         if (not self._currentAction) and self._actionQueue:
             self._startedAction(self._actionQueue.pop())
 
     def _matchPattern(self):
         bestFit = {
-            ATTACK : self._patternDifference(self._transitionAverages, self._attackRight),
+            ATTACK : self._patternDifference(self._transitionAverages, self._attack),
             UPGRADE : self._patternDifference(self._transitionAverages, self._upgrade),
             BUILD : self._patternDifference(self._transitionAverages, self._build),
-            SCAN : self._patternDifference(self._transitionAverages, self._scan),
+            #SCAN : self._patternDifference(self._transitionAverages, self._scan),
         }
 
         # Returns the key (ATTACK, UPGRADE, etc) with the smallest value assigned
@@ -179,7 +414,9 @@ class PlayerController(object):
         if the area is different from the last area checked, record the transition in self._sampleData
         """
         keys = ['x', 'y', 'z']
+        #TODO [!!!] restore this line!
         data = self._readSerial()
+
         data = {'x': data[0], 'y': data[1], 'z': data[2]}
         results = {}
         for k in keys:
@@ -212,16 +449,7 @@ class PlayerController(object):
 
 
     def _readSerial(self):
-        try:
-            data = self._ser.readline()
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except serial.serialutil.SerialException as detail:
-            print 'Serial error:', detail
-        else:
-            data = data.split()
-            for i in range(len(data)): data[i] = int(data[i])
-            return data
+        return self._ser.get_pos()
 
 
     def _initPattern(self,level):
@@ -237,5 +465,40 @@ class PlayerController(object):
 
 
     def _loadPattern(self,fileName):
-        with open(str(fileName), 'rb') as f:
+        #with open(str(fileName), 'rb') as f:
+        #    return pickle.load(f)
+        try:
+            f = open(str(fileName), 'rb')
             return pickle.load(f)
+        finally:
+            f.close()
+
+    def motionKeyPress(self, key):
+        if key == MOVE_UP:
+            self._movingUp = True
+
+        if key == MOVE_DOWN:
+            self._movingDown = True
+
+        if key == MOVE_LEFT:
+            self._movingLeft = True
+
+        if key == MOVE_RIGHT:
+            self._movingRight = True
+
+
+    def motionKeyRelease(self, key):
+        if key == MOVE_UP:
+            self._movingUp = False
+
+        if key == MOVE_DOWN:
+            self._movingDown = False
+
+        if key == MOVE_LEFT:
+            self._movingLeft = False
+
+        if key == MOVE_RIGHT:
+            self._movingRight = False
+
+    def isMotionKey(self, key):
+        return key == MOVE_UP or key == MOVE_DOWN or key == MOVE_LEFT or key == MOVE_RIGHT

@@ -10,102 +10,181 @@ from math import sqrt
 
 from kivy.support import install_twisted_reactor
 install_twisted_reactor()
-from twisted.spread import pb
 from twisted.internet import reactor
+from twisted.application import internet
+from twisted.internet import protocol
+from twisted.protocols.basic import LineReceiver
+import cPickle
 
 
+class TrackingClient(LineReceiver):
+    def connectionMade(self):
+        print "connected"
+        self.factory.clients.append(self)
 
-def calculate_points(x1, y1, x2, y2, steps=5):
-    dx = x2 - x1
-    dy = y2 - y1
-    dist = sqrt(dx * dx + dy * dy)
-    if dist < steps:
-        return None
-    o = []
-    m = dist / steps
-    for i in xrange(1, int(m)):
-        mi = i / m
-        lastx = x1 + dx * mi
-        lasty = y1 + dy * mi
-        o.extend([lastx, lasty])
-    return o
+    def connectionLost(self, raisin):
+        self.factory.clients.remove(self)
 
+    def lineReceived(self, line):
+        pass
 
+    def send(self, msg):
+        self.sendLine(msg)
 
 class Tracker(FloatLayout):
-
     def connect(self):
-        self._lost_targets = []
-        self._new_targets = []
-        self._moved_targets = []
-        self._clientfactory = pb.PBClientFactory()
-        reactor.connectTCP("localhost", 8789, self._clientfactory)
-        d = self._clientfactory.getRootObject()
-        d.addCallback(self.send_msg)
+        self.numCorners = 0
+        win = self.get_parent_window()
 
-    def send_msg(self, result):
-        result.callRemote("echo", "hello network")
+        # SETUP
+        self.flip = False
 
-    def send_lost_target(self, result):
-        result.callRemote("lost_target", self._lost_targets.pop())
+        self.real_start_y = 12
+        self.real_height = -24
 
-    def send_new_target(self, result):
-        result.callRemote("new_target", self._new_targets.pop())
+        self.real_start_x = -20
+        #self.real_start_x = 0
+        self.real_width = 20
 
-    def send_target_moved(self, result):
-        result.callRemote("moved_target", self._moved_targets.pop())
+        print self.real_height, self.real_width
 
-    def get_msg(self, result):
-        print "server echoed: ", result
+        self._ready = False;
+        self._corners = [];
+
+        self.factory = protocol.ServerFactory()
+        self.factory.protocol = TrackingClient
+        self.factory.clients = []
+
+        reactor.listenTCP(1025, self.factory)
+
+    def send(self, data):
+        msg = cPickle.dumps(data)
+
+        for c in self.factory.clients:
+            c.send(msg)
+
+    def _init_corner(self, touch):
+        print len(self._corners)
+        self._corners.append(touch)
+        self.numCorners += 1
+        if self.numCorners == 4:
+            self._init_keystone()
+            self._ready = True
+
+    def _init_keystone(self):
+        self._corners.sort(key = lambda touch: touch.y)
+
+        if self._corners[0].x > self._corners[1].x:
+            temp = self._corners[0]
+            self._corners[0] = self._corners[1]
+            self._corners[1] = temp
+
+        if self._corners[2].x > self._corners[3].x:
+            temp = self._corners[2]
+            self._corners[2] = self._corners[3]
+            self._corners[3] = temp
+
+        self.start_y = self._corners[0].y
+        self.height1 = self._corners[2].y - self.start_y
+
+        self.start_x1 = self._corners[0].x
+        self.start_x2 = self._corners[2].x
+        self.width1 = self._corners[1].x - self._corners[0].x
+        self.width2 = self._corners[3].x - self._corners[2].x
+
+        print (self._corners[0].x, self._corners[0].y)
+        print (self._corners[1].x, self._corners[1].y)
+        print (self._corners[2].x, self._corners[2].y)
+        print (self._corners[3].x, self._corners[3].y)
+
+
+    def rectify(self, touch):
+        y_percent = (touch.y - self.start_y) / self.height1
+
+        start_x = (1 - y_percent) * self.start_x1 + y_percent * self.start_x2
+        width = (1 - y_percent) * self.width1 + y_percent * self.width2
+        x_percent = (touch.x - start_x) / width
+
+        if self.flip:
+            temp = x_percent
+            x_percent = y_percent
+            y_percent = temp
+
+        y = self.real_start_y + (self.real_height * y_percent)
+        x = self.real_start_x + (self.real_width * x_percent)
+
+        return x, y
+
+    def isCorner(self, touch):
+        def dist2(t1, t2):
+            dx = t1.x - t2.x
+            dy = t1.y - t2.y
+            return dx*dx + dy * dy
+
+        for c in self._corners:
+            if dist2(c, touch) < 500:
+                self._corners.remove(c)
+                return True
+
+        return False
 
     def on_touch_down(self, touch):
-        win = self.get_parent_window()
+        ud = touch.ud
+        ud['group'] = g = str(touch.uid)
+
+        if not self._ready:
+            self._init_corner(touch)
+            return;
+
+        if self.numCorners != 4 and self.isCorner(touch):
+            self._init_corner(touch)
+            return
+
+        x, y = self.rectify(touch)
+        print x, y
+
         ud = touch.ud
         ud['group'] = g = str(touch.uid)
         with self.canvas:
             ud['color'] = Color(random(), 1, 1, mode='hsv', group=g)
-            ud['lines'] = (
-                Rectangle(pos=(touch.x, 0), size=(1, win.height), group=g),
-                Rectangle(pos=(0, touch.y), size=(win.width, 1), group=g),
-                Point(points=(touch.x, touch.y), source='particle.png',
-                      pointsize=5, group=g))
+            ud['lines'] = Point(
+                points = (x, y),
+                source = 'particle.png',
+                pointsize = 5,
+                group=g)
 
-        ud['label'] = Label(size_hint=(None, None))
-        self.update_touch_label(ud['label'], touch)
-        self.add_widget(ud['label'])
-        self._new_targets.append({'id': touch.uid, 'position': {'x': touch.x, 'y': touch.y}})
-        d = self._clientfactory.getRootObject()
-        d.addCallback(self.send_new_target)
+        self.send({'type': 'new', 'id': touch.uid, 'pos': (x, y)})
 
     def on_touch_move(self, touch):
+        if touch in self._corners:
+            return
+
+        x, y = self.rectify(touch)
+
         ud = touch.ud
-        ud['lines'][0].pos = touch.x, 0
-        ud['lines'][1].pos = 0, touch.y
 
-        points = ud['lines'][2].points
-        oldx, oldy = points[-2], points[-1]
-        points = calculate_points(oldx, oldy, touch.x, touch.y)
-        if points:
-            try:
-                lp = ud['lines'][2].add_point
-                for idx in xrange(0, len(points), 2):
-                    lp(points[idx], points[idx+1])
-            except GraphicException:
-                pass
+        try:
+            ud['lines'] = Point(
+                points = (x, y),
+                source = 'particle.png',
+                pointsize = 5,
+                group=ud['group'])
+        except GraphicException:
+            pass
 
-        ud['label'].pos = touch.pos
-        self.update_touch_label(ud['label'], touch)
-        self._moved_targets.append({'id': touch.uid, 'position': {'x': touch.x, 'y': touch.y}})
-        d = self._clientfactory.getRootObject()
-        d.addCallback(self.send_target_moved)
+        self.send({'type': 'mov', 'id': touch.uid, 'pos': (x, y)})
+
 
     def on_touch_up(self, touch):
+        if touch in self._corners:
+            #self.numCorners -= 1
+            return
+
         ud = touch.ud
         self.canvas.remove_group(ud['group'])
-        self.remove_widget(ud['label'])
-        self._lost_targets.append({'id': touch.uid, 'position': {'x': touch.x, 'y': touch.y}})
-        d = self._clientfactory.getRootObject()
-        d.addCallback(self.send_lost_target)
+
+        self.send({'type': 'del', 'id': touch.uid})
+
 
     def update_touch_label(self, label, touch):
         label.text = 'ID: %s\nPos: (%d, %d)\nClass: %s' % (
@@ -113,7 +192,6 @@ class Tracker(FloatLayout):
         label.texture_update()
         label.pos = touch.pos
         label.size = label.texture_size[0] + 20, label.texture_size[1] + 20
-
 
 
 class TrackerApp(App):

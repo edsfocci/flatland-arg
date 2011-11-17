@@ -13,9 +13,14 @@ from twisted.cred import credentials
 from twisted.internet.protocol import DatagramProtocol
 import pygame
 import os
+from game.player import _initSounds
+
+USE_FULL_SCREEN = False
 
 if os.environ.get("FARG_INPUT") == "wand":
     from game.actions_wand import PlayerController
+    USE_FULL_SCREEN = True
+    print("full screen")
 else:
     from game.actions_keyboard import PlayerController
 
@@ -47,10 +52,20 @@ class Client():
     def shutdown(self, result):
         reactor.stop()
 
+    pygame.mixer.pre_init(frequency=16000,size=8,channels=1,buffer=1024)#, size=-8, channels=1)
 pygame.init()
-pygame.display.set_mode((480, 800), pygame.DOUBLEBUF)
+#pygame.display.set_mode((480, 800), pygame.DOUBLEBUF)#for computers
+_initSounds()
+
+displayFlags = pygame.DOUBLEBUF
+if USE_FULL_SCREEN:
+    displayFlags = displayFlags | pygame.FULLSCREEN
+    pygame.mouse.set_visible(False)
+pygame.display.set_mode((800, 480), displayFlags)#for phone
+# TODO: restore background music
 #pygame.mixer.music.load("data/sfx/background.mp3")
 #pygame.mixer.music.play(-1)
+
 bootstrap = Bootstrap()
 bootstrap.port = reactor.listenUDP(8000, bootstrap)
 reactor.run()

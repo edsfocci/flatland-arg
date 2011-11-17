@@ -64,17 +64,15 @@ class Window(object):
             x -= bgWidth;
         while y > 0:
             y -= bgHeight
-        while x < 480:
+        while x < self.screen.get_width():#800:#480:
             j = y
-            while j < 800:
+            while j < self.screen.get_height():#480:#800:
                 self.screen.blit(bg._image, pygame.Rect(x, j, bgWidth, bgHeight))
                 j += bgHeight
             x += bgWidth
         self.environment.paint(self)
         if self.action:
-
         #   self.action.draw(self.screen, Vector2D((240, 400)))
-
             pass
         pygame.display.flip()
 
@@ -100,6 +98,10 @@ class Window(object):
         pygame.display.set_caption(title)
         self._renderCall = LoopingCall(self.paint)
         self._renderCall.start(0.03)
-
+        
+        (cx, cy) = self.screen.get_rect().center
+#        print "envirn: " + str(self.environment.width) + " x " + str(self.environment.height)
+#        print "screen: " + str(self.screen.get_width()) + " x " + str(self.screen.get_height())
+#        print "scrctr: " + str(cx) + ", " + str(cy)
     def stop(self):
         self._renderCall.stop()
