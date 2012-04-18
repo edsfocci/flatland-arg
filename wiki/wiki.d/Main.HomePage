@@ -1,0 +1,14 @@
+version=pmwiki-2.2.36 ordered=1 urlencoded=1
+agent=Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:11.0) Gecko/20100101 Firefox/11.0
+author=
+charset=ISO-8859-1
+csum=
+host=127.0.0.1
+name=Main.HomePage
+rev=203
+targets=
+text=Welcome to Flatland ARG!!! Wiki!%0a%0aThis wiki is intended to document the progress of the development of this augmented reality game.%0a%0aOur second goal is to make it easier for other developers to jump aboard and help this project become a success.%0a%0aUCLA Website: http://games.ucla.edu/games/flatland/%0a
+time=1333899695
+author:1333899695=
+diff:1333899695:1316331993:=1,7c1,12%0a%3c Welcome to Flatland ARG!!! Wiki!%0a%3c %0a%3c This wiki is intended to document the progress of the development of this augmented reality game.%0a%3c %0a%3c Our second goal is to make it easier for other developers to jump aboard and help this project become a success.%0a%3c %0a%3c UCLA Website: http://games.ucla.edu/games/flatland/%0a---%0a> Welcome to PmWiki!%0a> %0a> A local copy of PmWiki's%0a> documentation has been installed along with the software,%0a> and is available via the [[PmWiki/documentation index]].  %0a> %0a> To continue setting up PmWiki, see [[PmWiki/initial setup tasks]].%0a> %0a> The [[PmWiki/basic editing]] page describes how to create pages%0a> in PmWiki.  You can practice editing in the [[wiki sandbox]].%0a> %0a> More information about PmWiki is available from http://www.pmwiki.org.%0a
+host:1333899695=127.0.0.1
